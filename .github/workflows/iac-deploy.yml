@@ -147,6 +147,18 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: terraform validate
 
+      # Phase 1: If the Cloud Run service exists in state with deletion_protection=true
+      # (from a previous failed run), apply just that resource first to flip it to false.
+      # This is a no-op when the service doesn't exist yet or is already false.
+      - name: Unlock Cloud Run deletion protection (if needed)
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform apply -input=false -auto-approve \
+            -target=module.compute.google_cloud_run_v2_service.app \
+            -var="image=${{ env.TF_VAR_image }}" \
+            -var="db_password=${{ env.TF_VAR_db_password }}" \
+            -var="jwt_secret=${{ env.TF_VAR_jwt_secret }}" || true
+
       - name: Terraform Plan
         id: plan
         working-directory: ${{ env.WORKING_DIR }}
