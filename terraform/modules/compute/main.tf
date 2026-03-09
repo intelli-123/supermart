@@ -76,6 +76,17 @@ resource "google_cloud_run_v2_service" "app" {
       image = "gcr.io/cloud-sql-connectors/cloud-sql-proxy:2"
       args  = ["--port=3306", var.cloudsql_connection_name]
 
+      # startup_probe is required by Cloud Run when this container is listed in depends_on
+      startup_probe {
+        tcp_socket {
+          port = 3306
+        }
+        initial_delay_seconds = 5
+        timeout_seconds       = 5
+        period_seconds        = 10
+        failure_threshold     = 3
+      }
+
       resources {
         limits = {
           cpu    = "0.5"
