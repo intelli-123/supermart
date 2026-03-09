@@ -73,19 +73,23 @@ resource "google_cloud_run_v2_service" "app" {
 
     # Cloud SQL Auth Proxy sidecar — handles authenticated connections to Cloud SQL
     containers {
-      name  = "cloud-sql-proxy"
+      name = "cloud-sql-proxy"
       image = "gcr.io/cloud-sql-connectors/cloud-sql-proxy:2"
-      args  = ["--port=3306", var.cloudsql_connection_name]
+      # --health-check enables HTTP health server on :9090 (/startup /readiness /liveness)
+      # Cloud Run probes from OUTSIDE the network namespace, so TCP on 127.0.0.1 is unreachable.
+      # The HTTP health server binds to 0.0.0.0:9090 and is reachable by Cloud Run infrastructure.
+      args = ["--port=3306", "--health-check", var.cloudsql_connection_name]
 
       # startup_probe is required by Cloud Run when this container is listed in depends_on
       startup_probe {
-        tcp_socket {
-          port = 3306
+        http_get {
+          path = "/startup"
+          port = 9090
         }
         initial_delay_seconds = 5
         timeout_seconds       = 5
         period_seconds        = 10
-        failure_threshold     = 3
+        failure_threshold     = 5
       }
 
       resources {
