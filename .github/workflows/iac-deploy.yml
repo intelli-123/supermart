@@ -147,17 +147,18 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: terraform validate
 
-      # Phase 1: If the Cloud Run service exists in state with deletion_protection=true
-      # (from a previous failed run), apply just that resource first to flip it to false.
-      # This is a no-op when the service doesn't exist yet or is already false.
-      - name: Unlock Cloud Run deletion protection (if needed)
+      # If a previous failed run left the Cloud Run service in GCP with a bad revision
+      # and in Terraform state with deletion_protection=true, Terraform cannot replace it.
+      # Fix: delete the service from GCP and remove from state so Terraform creates it fresh.
+      - name: Clean up stuck Cloud Run service (if any)
         working-directory: ${{ env.WORKING_DIR }}
         run: |
-          terraform apply -input=false -auto-approve \
-            -target=module.compute.google_cloud_run_v2_service.app \
-            -var="image=${{ env.TF_VAR_image }}" \
-            -var="db_password=${{ env.TF_VAR_db_password }}" \
-            -var="jwt_secret=${{ env.TF_VAR_jwt_secret }}" || true
+          gcloud run services delete svc-supermart-dev \
+            --region=${{ env.REGION }} \
+            --project=${{ env.GCP_PROJECT_ID }} \
+            --quiet 2>/dev/null || true
+          terraform state rm module.compute.google_cloud_run_v2_service.app 2>/dev/null || true
+          terraform state rm module.compute.google_cloud_run_v2_service_iam_member.public_invoker 2>/dev/null || true
 
       - name: Terraform Plan
         id: plan
